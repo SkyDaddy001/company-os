@@ -1,0 +1,188 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap');
+
+:root {
+  --bg-color: #0b0f19;
+  --grid-color: rgba(0, 240, 255, 0.05);
+  
+  --dept-bg: rgba(18, 25, 43, 0.5);
+  --dept-border: rgba(0, 240, 255, 0.2);
+  --dept-glow: rgba(0, 240, 255, 0.1);
+  
+  --text-main: #e2e8f0;
+  --text-dim: #94a3b8;
+  --accent: #00f0ff;
+  --blur: blur(12px);
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: 'Inter', sans-serif;
+  background-color: var(--bg-color);
+  color: var(--text-main);
+  height: 100vh;
+  overflow: hidden;
+  perspective: 2000px; /* Enable 3D space */
+}
+
+/* Base OS HUD Elements */
+.top-bar {
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  padding: 1rem 2rem;
+  display: flex;
+  justify-content: space-between;
+  background: linear-gradient(to bottom, rgba(11, 15, 25, 0.9), transparent);
+  z-index: 100;
+}
+
+.brand {
+  font-weight: 600;
+  color: var(--accent);
+  letter-spacing: 2px;
+  text-transform: uppercase;
+}
+
+.stats {
+  display: flex;
+  gap: 2rem;
+  font-size: 0.85rem;
+  color: var(--text-dim);
+}
+
+/* Isometric Office Environment */
+.office-environment {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 1200px;
+  height: 800px;
+  transform-style: preserve-3d;
+  /* Isometric transform */
+  transform: translate(-50%, -50%) rotateX(60deg) rotateZ(-45deg);
+}
+
+/* Floor Grid */
+.floor-grid {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  background-image: 
+    linear-gradient(var(--grid-color) 2px, transparent 2px),
+    linear-gradient(90deg, var(--grid-color) 2px, transparent 2px);
+  background-size: 40px 40px;
+  border: 1px solid var(--grid-color);
+  box-shadow: inset 0 0 100px rgba(0, 240, 255, 0.05);
+  transform: translateZ(-1px);
+}
+
+/* Departments */
+.department {
+  position: absolute;
+  background: var(--dept-bg);
+  backdrop-filter: var(--blur);
+  border: 1px solid var(--dept-border);
+  border-radius: 8px;
+  box-shadow: 
+    0 0 30px var(--dept-glow),
+    inset 0 0 20px rgba(0,0,0,0.5);
+  transform-style: preserve-3d;
+  display: flex;
+  flex-direction: column;
+  padding: 1.5rem;
+  transition: all 0.3s ease;
+}
+
+/* Make departments stand up slightly from the floor */
+.department::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  transform: translateZ(10px);
+  pointer-events: none;
+}
+
+/* 3D Walls for Departments to give them thickness */
+.dept-wall-bottom {
+  position: absolute;
+  bottom: 0; left: 0; width: 100%; height: 20px;
+  background: rgba(18, 25, 43, 0.8);
+  border: 1px solid var(--dept-border);
+  transform-origin: bottom;
+  transform: rotateX(-90deg);
+}
+
+.dept-wall-right {
+  position: absolute;
+  top: 0; right: 0; width: 20px; height: 100%;
+  background: rgba(18, 25, 43, 0.6);
+  border: 1px solid var(--dept-border);
+  transform-origin: right;
+  transform: rotateY(-90deg);
+}
+
+.dept-header {
+  transform: translateZ(15px); /* Float text above the floor */
+  margin-bottom: 1rem;
+}
+
+.dept-title {
+  font-size: 1.2rem;
+  font-weight: 500;
+  color: var(--accent);
+  letter-spacing: 1px;
+}
+
+.dept-agents {
+  transform: translateZ(15px);
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(30px, 1fr));
+  gap: 10px;
+  margin-top: auto;
+}
+
+.agent-node {
+  width: 12px;
+  height: 12px;
+  background: var(--accent);
+  border-radius: 50%;
+  box-shadow: 0 0 10px var(--accent);
+}
+
+/* Active State */
+.department.active {
+  border-color: #fff;
+  background: rgba(0, 240, 255, 0.1);
+  box-shadow: 0 0 50px rgba(0, 240, 255, 0.2);
+}
+
+.department.active .agent-node {
+  background: #fff;
+  box-shadow: 0 0 15px #fff;
+}
+
+/* Data Packets (Events moving between departments) */
+.data-packet {
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  background: #f000ff;
+  border-radius: 50%;
+  box-shadow: 0 0 15px 5px rgba(240, 0, 255, 0.6);
+  transform: translateZ(5px);
+  z-index: 50;
+  pointer-events: none;
+}
+
+/* Specific Department Positioning */
+#ceo-office { top: 50px; left: 400px; width: 400px; height: 150px; }
+#engineering { top: 250px; left: 50px; width: 300px; height: 400px; }
+#product { top: 250px; left: 400px; width: 400px; height: 250px; }
+#marketing { top: 250px; left: 850px; width: 300px; height: 400px; }
+#support { top: 550px; left: 400px; width: 400px; height: 200px; }
