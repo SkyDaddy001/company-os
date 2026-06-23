@@ -7,10 +7,19 @@ import * as THREE from 'three';
 import './index.css';
 
 // --- Bug reporting ---
+const _reportedThisSession = new Set<string>();
+let _lastReportTime = 0;
+
 async function reportBug(params: {
   title: string; description?: string; source?: string;
   project?: string; severity?: string; stack?: string; url?: string;
 }) {
+  const key = params.title.slice(0, 80);
+  if (_reportedThisSession.has(key)) return;        // same error already sent this session
+  const now = Date.now();
+  if (now - _lastReportTime < 5000) return;         // max 1 report per 5s
+  _reportedThisSession.add(key);
+  _lastReportTime = now;
   try {
     await fetch('/api/bug-report', {
       method: 'POST',
@@ -20,11 +29,27 @@ async function reportBug(params: {
   } catch {}
 }
 
+// WebGL support check — tested once at startup
+function checkWebGL(): boolean {
+  try {
+    const canvas = document.createElement('canvas');
+    return !!(canvas.getContext('webgl2') || canvas.getContext('webgl') || canvas.getContext('experimental-webgl'));
+  } catch {
+    return false;
+  }
+}
+const WEBGL_SUPPORTED = typeof window !== 'undefined' && checkWebGL();
+
+// Known noise — don't file GitHub issues for these
+const IGNORED_ERRORS = ['webgl', 'webgl2', 'experimental-webgl', 'Error creating WebGL', 'lost context', 'NotSupportedError', 'session configuration is not supported', 'XRSession'];
+
 // Global JS error → bug report
 if (typeof window !== 'undefined') {
   window.onerror = (msg, src, line, col, err) => {
+    const title = String(msg);
+    if (IGNORED_ERRORS.some(s => title.toLowerCase().includes(s.toLowerCase()))) return;
     reportBug({
-      title: String(msg).slice(0, 120),
+      title: title.slice(0, 120),
       description: `File: ${src}  Line: ${line}:${col}`,
       stack: err?.stack,
       url: window.location.href,
@@ -32,8 +57,10 @@ if (typeof window !== 'undefined') {
     });
   };
   window.addEventListener('unhandledrejection', (e) => {
+    const title = String(e.reason);
+    if (IGNORED_ERRORS.some(s => title.toLowerCase().includes(s.toLowerCase()))) return;
     reportBug({
-      title: `Unhandled Promise: ${String(e.reason).slice(0, 120)}`,
+      title: `Unhandled Promise: ${title.slice(0, 120)}`,
       stack: e.reason?.stack,
       url: window.location.href,
       severity: 'medium',
@@ -65,7 +92,7 @@ class ErrorBoundary extends Component<{ children: ReactNode }, { error: Error | 
   }
 }
 
-const store = createXRStore();
+const store = WEBGL_SUPPORTED ? createXRStore() : null as any;
 
 // --- Global State ---
 type Department = { id: string; name: string; agents: number; tasks: string; orbitRadius: number; orbitSpeed: number; angle: number; color: string };
@@ -776,13 +803,37 @@ const CompanyOS = () => {
     setFocusTarget({ target: pos, isOverview });
   };
 
+  if (!WEBGL_SUPPORTED) {
+    return (
+      <div style={{ background: '#000', color: '#00f0ff', fontFamily: 'monospace', minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
+        <div style={{ padding: '20px 24px', borderBottom: '1px solid #00f0ff22', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <span style={{ letterSpacing: 4, fontSize: '0.85rem' }}>QUCOGROUP · COMPANY OS</span>
+          <span style={{ color: '#ffaa00', fontSize: '0.7rem' }}>⚠ WebGL unavailable — 2D mode</span>
+        </div>
+        <div style={{ flex: 1, padding: '20px 24px', display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '12px', alignContent: 'start' }}>
+          {activeProjects.map(proj =>
+            proj.departments.map(dept => (
+              <div key={dept.id} style={{ border: `1px solid ${proj.color}44`, borderRadius: 8, padding: '14px', background: `${proj.color}08` }}>
+                <div style={{ color: proj.color, fontSize: '0.7rem', letterSpacing: 2, marginBottom: 6 }}>{proj.name.toUpperCase()}</div>
+                <div style={{ color: '#e2e8f0', fontSize: '0.85rem', marginBottom: 4 }}>{dept.name}</div>
+                <div style={{ color: dept.tasks === 'Idle' ? '#444' : '#00ff88', fontSize: '0.7rem' }}>▶ {dept.tasks}</div>
+              </div>
+            ))
+          )}
+        </div>
+        <ActivityLog events={osEvents} />
+        <CommandTerminal onDispatch={dispatchTask} projectsState={activeProjects} />
+      </div>
+    );
+  }
+
   return (
     <>
       <NavigationHUD projectsState={activeProjects} onFocus={handleFocus} />
 
       {/* VR icon — bottom left, above footer */}
       <button
-        onClick={() => store.enterVR()}
+        onClick={() => store?.enterVR()}
         title="Enter Galactic VR View"
         style={{
           position: 'fixed',
@@ -813,6 +864,13 @@ const CompanyOS = () => {
       <Canvas
         style={{ position: 'fixed', top: 0, left: 0, right: '280px', bottom: '44px', background: '#000000' }}
         camera={{ position: [0, 15, 30] }}
+        onCreated={({ gl }) => {
+          gl.domElement.addEventListener('webglcontextlost', (e) => {
+            e.preventDefault();
+            console.warn('WebGL context lost — reloading in 3s');
+            setTimeout(() => window.location.reload(), 3000);
+          });
+        }}
       >
         <XR store={store}>
           <color attach="background" args={['#000000']} />
