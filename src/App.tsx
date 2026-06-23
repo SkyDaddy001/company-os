@@ -1,4 +1,5 @@
-import { useState, useRef, useEffect, Component, ReactNode } from 'react';
+import { useState, useRef, useEffect, Component } from 'react';
+import type { ReactNode } from 'react';
 import { Canvas, useFrame } from '@react-three/fiber';
 import { CameraControls, Sphere, Text, Html, Stars } from '@react-three/drei';
 import { createXRStore, XR } from '@react-three/xr';
@@ -85,13 +86,13 @@ const projects: Project[] = [
     color: '#00f0ff',
     analytics: null,
     departments: [
-      { id: 'brand_soul', name: 'Brand & Phil.', agents: 3, tasks: 'Idle', orbitRadius: 4, orbitSpeed: 0.08, angle: 0, color: '#00f0ff' },
-      { id: 'prod_soul', name: 'Product', agents: 5, tasks: 'Idle', orbitRadius: 5.5, orbitSpeed: 0.06, angle: Math.PI / 4, color: '#00f0ff' },
-      { id: 'eng_soul', name: 'Engineering', agents: 12, tasks: 'Idle', orbitRadius: 7, orbitSpeed: 0.05, angle: Math.PI / 2, color: '#00f0ff' },
-      { id: 'devops_soul', name: 'DevOps (SysHealth)', agents: 4, tasks: 'Monitoring infra...', orbitRadius: 8.5, orbitSpeed: 0.04, angle: Math.PI, color: '#ffaa00' },
-      { id: 'mkt_soul', name: 'Marketing', agents: 8, tasks: 'Idle', orbitRadius: 10, orbitSpeed: 0.03, angle: Math.PI * 1.5, color: '#00f0ff' },
-      { id: 'supp_soul', name: 'Customer Support', agents: 6, tasks: 'Idle', orbitRadius: 11.5, orbitSpeed: 0.025, angle: Math.PI * 1.8, color: '#00f0ff' },
-      { id: 'res_soul', name: 'Research', agents: 4, tasks: 'Idle', orbitRadius: 13, orbitSpeed: 0.02, angle: Math.PI * 2.2, color: '#00f0ff' },
+      { id: 'brand_soul', name: 'Aarya · Brand', agents: 3, tasks: 'Idle', orbitRadius: 4, orbitSpeed: 0.08, angle: 0, color: '#00f0ff' },
+      { id: 'prod_soul', name: 'Dhruv · Product', agents: 5, tasks: 'Idle', orbitRadius: 5.5, orbitSpeed: 0.06, angle: Math.PI / 4, color: '#00f0ff' },
+      { id: 'eng_soul', name: 'Arjun · Engineering', agents: 12, tasks: 'Idle', orbitRadius: 7, orbitSpeed: 0.05, angle: Math.PI / 2, color: '#00f0ff' },
+      { id: 'devops_soul', name: 'Rohan · DevOps', agents: 4, tasks: 'Monitoring infra...', orbitRadius: 8.5, orbitSpeed: 0.04, angle: Math.PI, color: '#ffaa00' },
+      { id: 'mkt_soul', name: 'Kiran · Marketing', agents: 8, tasks: 'Idle', orbitRadius: 10, orbitSpeed: 0.03, angle: Math.PI * 1.5, color: '#00f0ff' },
+      { id: 'supp_soul', name: 'Priya · Support', agents: 6, tasks: 'Idle', orbitRadius: 11.5, orbitSpeed: 0.025, angle: Math.PI * 1.8, color: '#00f0ff' },
+      { id: 'res_soul', name: 'Vivek · Research', agents: 4, tasks: 'Idle', orbitRadius: 13, orbitSpeed: 0.02, angle: Math.PI * 2.2, color: '#00f0ff' },
     ]
   },
   {
@@ -101,9 +102,9 @@ const projects: Project[] = [
     color: '#ff00ff',
     analytics: null,
     departments: [
-      { id: 'eng_mind', name: 'Core AI', agents: 8, tasks: 'Idle', orbitRadius: 5, orbitSpeed: 0.07, angle: 0, color: '#ff00ff' },
-      { id: 'research_mind', name: 'Research Lab', agents: 15, tasks: 'Analyzing patterns', orbitRadius: 7.5, orbitSpeed: 0.05, angle: Math.PI, color: '#ff00ff' },
-      { id: 'devops_mind', name: 'DevOps (SysHealth)', agents: 3, tasks: 'Monitoring infra...', orbitRadius: 10, orbitSpeed: 0.03, angle: Math.PI * 1.5, color: '#ffaa00' }
+      { id: 'eng_mind', name: 'Arjun · Core AI', agents: 8, tasks: 'Idle', orbitRadius: 5, orbitSpeed: 0.07, angle: 0, color: '#ff00ff' },
+      { id: 'research_mind', name: 'Vivek · Research', agents: 15, tasks: 'Analyzing patterns', orbitRadius: 7.5, orbitSpeed: 0.05, angle: Math.PI, color: '#ff00ff' },
+      { id: 'devops_mind', name: 'Rohan · DevOps', agents: 3, tasks: 'Monitoring infra...', orbitRadius: 10, orbitSpeed: 0.03, angle: Math.PI * 1.5, color: '#ffaa00' }
     ]
   }
 ];

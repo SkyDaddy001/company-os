@@ -68,6 +68,7 @@ async function postToMattermost(channelId, message) {
 const app = express();
 app.use(cors());
 app.use(express.json());
+app.use(express.static(require('path').join(__dirname, 'dist')));
 
 // --- DB + Redis clients ---
 const db = new Pool({
@@ -488,4 +489,9 @@ app.post('/api/bug-report', async (req, res) => {
   res.json({ ok: true, issue_url: issue.url, issue_number: issue.number });
 });
 
-app.listen(3001, () => console.log('PicoClaw API Bridge on :3001'));
+// SPA fallback — must be after all API routes
+app.get('/{*splat}', (req, res) => {
+  res.sendFile(require('path').join(__dirname, 'dist', 'index.html'));
+});
+
+app.listen(3001, () => console.log('Company OS server on :3001'));
