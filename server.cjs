@@ -626,6 +626,44 @@ app.post('/api/jenkins/build/:job', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// Mattermost search — agents call curl "http://172.17.0.1:3001/api/mm/search?q=..."
+// GET /api/mm/search?q=<query>&channel=<id>   → search posts
+// GET /api/mm/channel/:id/posts?limit=20       → recent posts in a channel
+app.get('/api/mm/search', async (req, res) => {
+  const q       = req.query.q || '';
+  const channel = req.query.channel || '';
+  if (!q) return res.status(400).json({ error: 'q param required' });
+  try {
+    const body = { terms: q, is_or_search: false };
+    if (channel) body.channel_ids = [channel];
+    const r = await fetch(`${MM_URL}/api/v4/posts/search`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${MM_BOT_TOKEN}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const data = await r.json();
+    const posts = (data.order || []).slice(0, 20).map(id => ({
+      id, message: data.posts[id]?.message, create_at: data.posts[id]?.create_at,
+      channel_id: data.posts[id]?.channel_id,
+    }));
+    res.json({ count: posts.length, posts });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/mm/channel/:id/posts', async (req, res) => {
+  const limit = Math.min(parseInt(req.query.limit) || 20, 50);
+  try {
+    const r = await fetch(`${MM_URL}/api/v4/channels/${req.params.id}/posts?per_page=${limit}`, {
+      headers: { Authorization: `Bearer ${MM_BOT_TOKEN}` },
+    });
+    const data = await r.json();
+    const posts = (data.order || []).map(id => ({
+      id, message: data.posts[id]?.message, create_at: data.posts[id]?.create_at,
+    }));
+    res.json({ count: posts.length, posts });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // SPA fallback — must be after all API routes
 app.get('/{*splat}', (req, res) => {
   res.sendFile(require('path').join(__dirname, 'dist', 'index.html'));
