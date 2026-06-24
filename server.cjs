@@ -6,8 +6,9 @@ const { Pool } = require('pg');
 const { createClient } = require('redis');
 
 // --- Mattermost config ---
-const MM_URL = process.env.MM_URL || 'http://localhost:8065';
-const MM_BOT_TOKEN = process.env.MM_BOT_TOKEN;
+const MM_URL        = process.env.MM_URL        || 'http://localhost:8065';
+const MM_BOT_TOKEN  = process.env.MM_BOT_TOKEN;   // bot — for notifications/replies
+const MM_ADMIN_TOKEN = process.env.MM_ADMIN_TOKEN; // admin user — directives go through bridge
 
 // --- GitHub config ---
 const GITHUB_TOKEN = process.env.GITHUB_TOKEN;
@@ -35,29 +36,20 @@ async function createGithubIssue(repo, title, body, labels = []) {
   }
 }
 
-// Maps dept prefix → Mattermost channel ID
-// Department channels removed — all events route to project channels
+// Project channels — routing by targetId suffix (_soul / _mind) then by dept
 const CH_QUCOGROUP  = 'fpkydxtjyjrx8qyjugyzk1aaxc'; // #qucogroup-com
 const CH_SOULOSCOPE = 'n5f9h1h5ktg738cc1tojhxu5ih'; // #souloscope
+const CH_MINDPRINT  = '1fw6ukyixpnuzmt8nrtsc3iw1w'; // #mindprint
 const CH_BOSS       = 'bxumznxnciy9pqg1e9api4oagy'; // #boss
 
-const DEPT_CHANNELS = {
-  brand:  CH_SOULOSCOPE,
-  prod:   CH_SOULOSCOPE,
-  eng:    CH_QUCOGROUP,
-  devops: CH_QUCOGROUP,
-  mkt:    CH_SOULOSCOPE,
-  supp:   CH_SOULOSCOPE,
-  res:    CH_QUCOGROUP,
-};
-
+// Route targetId → channel: suffix wins, then dept prefix fallback
 function channelForDept(targetId) {
-  for (const [prefix, channelId] of Object.entries(DEPT_CHANNELS)) {
-    if (targetId.startsWith(prefix)) return channelId;
-  }
-  return DEPT_CHANNELS.eng; // fallback
+  if (targetId.endsWith('_soul'))  return CH_SOULOSCOPE;
+  if (targetId.endsWith('_mind'))  return CH_MINDPRINT;
+  return CH_QUCOGROUP; // company-os agents
 }
 
+// Notification post (bot) — for replies, completions, alerts
 async function postToMattermost(channelId, message) {
   try {
     await fetch(`${MM_URL}/api/v4/posts`, {
@@ -67,6 +59,20 @@ async function postToMattermost(channelId, message) {
     });
   } catch (e) {
     console.warn('Mattermost post failed:', e.message);
+  }
+}
+
+// Directive post (admin user) — routes through mm-bridge → PicoClaw agent
+async function postDirective(channelId, message) {
+  const token = MM_ADMIN_TOKEN || MM_BOT_TOKEN;
+  try {
+    await fetch(`${MM_URL}/api/v4/posts`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ channel_id: channelId, message }),
+    });
+  } catch (e) {
+    console.warn('Directive post failed:', e.message);
   }
 }
 
@@ -214,7 +220,8 @@ app.post('/api/dispatch', async (req, res) => {
   await publishEvent('task.dispatched', targetId, cmd);
 
   const channelId = channelForDept(targetId);
-  postToMattermost(channelId, `**[${targetId}]** 📡 Directive received:\n> ${cmd}`);
+  // Post as admin so mm-bridge picks it up and routes to PicoClaw agent
+  postDirective(channelId, cmd);
 
   const memCtx = readMemory(targetId);
   const model = modelForTarget(targetId);
