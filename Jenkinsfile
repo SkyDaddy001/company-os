@@ -2,8 +2,8 @@ pipeline {
     agent any
 
     environment {
-        APP_NAME   = 'company-os'
         DEPLOY_DIR = '/home/ubuntu/company-os-frontend'
+        HOST       = 'ubuntu@172.17.0.1'
     }
 
     triggers {
@@ -11,7 +11,7 @@ pipeline {
     }
 
     options {
-        timeout(time: 30, unit: 'MINUTES')
+        timeout(time: 20, unit: 'MINUTES')
         timestamps()
         disableConcurrentBuilds()
         buildDiscarder(logRotator(numToKeepStr: '10'))
@@ -26,59 +26,39 @@ pipeline {
             }
         }
 
-        stage('Install') {
+        stage('Build & Deploy') {
+            when { branch 'main' }
             steps {
-                sh 'npm ci --prefer-offline || npm install'
-            }
-        }
-
-        stage('Build') {
-            steps {
-                sh 'npm run build'
-            }
-        }
-
-        stage('Deploy') {
-            when { branch 'master' }
-            steps {
-                sh '''
-                    # Sync built assets and server to deploy dir
-                    rsync -a --delete dist/       ${DEPLOY_DIR}/dist/
-                    rsync -a            server.cjs ${DEPLOY_DIR}/server.cjs
-                    rsync -a            package.json ${DEPLOY_DIR}/package.json
-
-                    # Install production deps in deploy dir
-                    cd ${DEPLOY_DIR}
-                    npm install --omit=dev --prefer-offline 2>/dev/null || npm install --production || true
-
-                    # Restart the service
-                    sudo systemctl restart company-os.service
-                    sleep 3
-                    sudo systemctl is-active company-os.service
-                '''
+                sh """
+                    ssh -o StrictHostKeyChecking=no ${HOST} '
+                        set -e
+                        cd ${DEPLOY_DIR}
+                        git pull origin main
+                        npm install --prefer-offline || npm install
+                        npm run build
+                        sudo systemctl restart company-os.service
+                        sleep 3
+                        sudo systemctl is-active company-os.service
+                    '
+                """
             }
         }
 
         stage('Verify') {
-            when { branch 'master' }
+            when { branch 'main' }
             steps {
-                sh '''
-                    # Give server 5 seconds to bind
-                    sleep 5
-                    curl -sf http://localhost:3001/api/health || curl -sf http://localhost:3001/ | head -c 100
-                    echo "qucogroup.com is live"
-                '''
+                sh """
+                    sleep 3
+                    ssh -o StrictHostKeyChecking=no ${HOST} \
+                        'curl -sf http://localhost:3001/ | head -c 50 && echo " — OK"'
+                """
             }
         }
     }
 
     post {
         always { cleanWs() }
-        success {
-            echo "qucogroup.com deployed successfully — Build #${BUILD_NUMBER}"
-        }
-        failure {
-            echo "qucogroup.com deploy FAILED — Build #${BUILD_NUMBER}"
-        }
+        success { echo "qucogroup.com deployed — Build #${BUILD_NUMBER}" }
+        failure { echo "qucogroup.com deploy FAILED — Build #${BUILD_NUMBER}" }
     }
 }
