@@ -557,6 +557,27 @@ app.post('/api/bug-report', async (req, res) => {
   res.json({ ok: true, issue_url: issue.url, issue_number: issue.number });
 });
 
+// Docker status — called by agents via exec("curl http://localhost:3001/api/docker-status")
+app.get('/api/docker-status', (req, res) => {
+  exec("docker ps --format '{{.Names}}|{{.Status}}|{{.Image}}'", (err, stdout) => {
+    if (err) return res.status(500).json({ error: 'docker ps failed', detail: err.message });
+    const containers = stdout.trim().split('\n').filter(Boolean).map(line => {
+      const [name, status, image] = line.split('|');
+      const healthy = status?.includes('healthy');
+      const up      = status?.toLowerCase().startsWith('up');
+      return { name, status, image, healthy, up };
+    });
+    const unhealthy = containers.filter(c => c.up && !c.healthy && status?.includes('('));
+    res.json({
+      ts: new Date().toISOString(),
+      total: containers.length,
+      healthy: containers.filter(c => c.healthy).length,
+      unhealthy: unhealthy.length,
+      containers,
+    });
+  });
+});
+
 // SPA fallback — must be after all API routes
 app.get('/{*splat}', (req, res) => {
   res.sendFile(require('path').join(__dirname, 'dist', 'index.html'));
