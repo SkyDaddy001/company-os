@@ -409,50 +409,103 @@ const ProjectSystem = ({ project, onFocus }: { project: Project, onFocus: (pos: 
   );
 };
 
+const TEAM = [
+  { name: 'Vikram',  role: 'Chief AI Coordinator',    dept: 'Command',     emoji: '🎯', color: '#ffffff' },
+  { name: 'Arjun',  role: 'Engineering Lead',          dept: 'Engineering', emoji: '⚙️', color: '#00f0ff' },
+  { name: 'Rohan',  role: 'DevOps Lead',               dept: 'DevOps',      emoji: '🔧', color: '#ffaa00' },
+  { name: 'Kiran',  role: 'Marketing & Brand Lead',    dept: 'Marketing',   emoji: '📣', color: '#ff6ec7' },
+  { name: 'Vivek',  role: 'Research Lead',             dept: 'Research',    emoji: '🔍', color: '#00f0ff' },
+  { name: 'Dhruv',  role: 'Product Lead',              dept: 'Product',     emoji: '🗺️', color: '#00f0ff' },
+  { name: 'Priya',  role: 'Support Lead',              dept: 'Support',     emoji: '💬', color: '#00ff88' },
+];
+
 const NavigationHUD = ({ projectsState, onFocus }: { projectsState: Project[], onFocus: (pos: [number,number,number], isOverview: boolean) => void }) => {
+  const [tab, setTab] = useState<'map' | 'team'>('map');
+
   return (
     <div style={{
       position: 'fixed',
       top: '20px',
       left: '20px',
       zIndex: 100,
-      background: 'rgba(5, 10, 20, 0.8)',
-      backdropFilter: 'blur(10px)',
-      border: '1px solid #ffffff',
-      boxShadow: '0 0 30px rgba(255, 255, 255, 0.2)',
-      padding: '20px',
+      background: 'rgba(5, 10, 20, 0.88)',
+      backdropFilter: 'blur(12px)',
+      border: '1px solid rgba(255,255,255,0.15)',
+      boxShadow: '0 0 30px rgba(0,240,255,0.12)',
       borderRadius: '12px',
-      width: '250px',
+      width: '260px',
       color: '#fff',
       fontFamily: 'monospace',
       display: 'flex',
       flexDirection: 'column',
-      gap: '10px'
+      overflow: 'hidden',
     }}>
-      <div style={{ borderBottom: '1px solid #ffffff', paddingBottom: '10px', marginBottom: '5px', color: '#ffffff', fontWeight: 'bold' }}>
-        GALACTIC MAP
-      </div>
-      
-      <button 
-        onClick={() => onFocus([0, 0, 0], true)}
-        style={{ background: 'transparent', color: '#fff', border: '1px solid #fff', padding: '10px', cursor: 'pointer', textAlign: 'left', transition: '0.2s' }}
-        onMouseOver={e => e.currentTarget.style.background = 'rgba(255,255,255,0.2)'}
-        onMouseOut={e => e.currentTarget.style.background = 'transparent'}
-      >
-        [ SYSTEM OVERVIEW ]
-      </button>
 
-      {projectsState.map(p => (
-        <button 
-          key={p.id}
-          onClick={() => onFocus(p.position, false)}
-          style={{ background: 'transparent', color: p.color, border: `1px solid ${p.color}`, padding: '10px', cursor: 'pointer', textAlign: 'left', transition: '0.2s' }}
-          onMouseOver={e => e.currentTarget.style.background = `${p.color}40`}
-          onMouseOut={e => e.currentTarget.style.background = 'transparent'}
-        >
-          {p.name.toUpperCase()} SYSTEM
-        </button>
-      ))}
+      {/* Tab bar */}
+      <div style={{ display: 'flex', borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
+        {(['map', 'team'] as const).map(t => (
+          <button key={t} onClick={() => setTab(t)} style={{
+            flex: 1, padding: '12px 0', background: tab === t ? 'rgba(0,240,255,0.08)' : 'transparent',
+            color: tab === t ? '#00f0ff' : '#556', border: 'none',
+            borderBottom: tab === t ? '2px solid #00f0ff' : '2px solid transparent',
+            cursor: 'pointer', fontFamily: 'monospace', fontSize: '0.68rem', letterSpacing: '2px', fontWeight: 'bold',
+          }}>
+            {t === 'map' ? '◉ MAP' : '◈ TEAM'}
+          </button>
+        ))}
+      </div>
+
+      {/* MAP tab */}
+      {tab === 'map' && (
+        <div style={{ padding: '14px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+          <button
+            onClick={() => onFocus([0, 0, 0], true)}
+            style={{ background: 'transparent', color: '#fff', border: '1px solid rgba(255,255,255,0.2)', padding: '10px', cursor: 'pointer', textAlign: 'left', borderRadius: '6px', fontSize: '0.7rem', letterSpacing: '1px' }}
+            onMouseOver={e => e.currentTarget.style.background = 'rgba(255,255,255,0.08)'}
+            onMouseOut={e => e.currentTarget.style.background = 'transparent'}
+          >
+            [ SYSTEM OVERVIEW ]
+          </button>
+          {projectsState.map(p => (
+            <button
+              key={p.id}
+              onClick={() => onFocus(p.position, false)}
+              style={{ background: 'transparent', color: p.color, border: `1px solid ${p.color}40`, padding: '10px', cursor: 'pointer', textAlign: 'left', borderRadius: '6px', fontSize: '0.7rem', letterSpacing: '1px' }}
+              onMouseOver={e => e.currentTarget.style.background = `${p.color}18`}
+              onMouseOut={e => e.currentTarget.style.background = 'transparent'}
+            >
+              ◉ {p.name.toUpperCase()} SYSTEM
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* TEAM tab */}
+      {tab === 'team' && (
+        <div style={{ padding: '10px 0', display: 'flex', flexDirection: 'column', maxHeight: '420px', overflowY: 'auto' }}>
+          <div style={{ padding: '4px 14px 10px', color: '#445', fontSize: '0.6rem', letterSpacing: '2px' }}>
+            QUCOGROUP AI TEAM
+          </div>
+          {TEAM.map(m => (
+            <div key={m.name} style={{
+              display: 'flex', alignItems: 'center', gap: '10px',
+              padding: '9px 14px', cursor: 'default',
+              borderLeft: `2px solid transparent`,
+              transition: '0.15s',
+            }}
+              onMouseOver={e => { (e.currentTarget as HTMLDivElement).style.background = 'rgba(0,240,255,0.05)'; (e.currentTarget as HTMLDivElement).style.borderLeftColor = m.color; }}
+              onMouseOut={e => { (e.currentTarget as HTMLDivElement).style.background = 'transparent'; (e.currentTarget as HTMLDivElement).style.borderLeftColor = 'transparent'; }}
+            >
+              <span style={{ fontSize: '1.1rem', minWidth: '22px', textAlign: 'center' }}>{m.emoji}</span>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ color: m.color, fontSize: '0.75rem', fontWeight: 'bold' }}>{m.name}</div>
+                <div style={{ color: '#556', fontSize: '0.62rem', marginTop: '1px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{m.role}</div>
+              </div>
+              <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#00ff88', flexShrink: 0, boxShadow: '0 0 4px #00ff88' }} />
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 };

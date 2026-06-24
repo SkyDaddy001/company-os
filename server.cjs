@@ -361,70 +361,75 @@ app.get('/api/system', async (req, res) => {
 // --- GET /api/analytics ---
 const { Pool: PgPool } = require('pg');
 
-const soulDb = new PgPool({ connectionString: process.env.SOULOSCOPE_DATABASE_URL });
-const mindDb = new PgPool({ connectionString: process.env.MINDPRINT_DATABASE_URL });
+const soulDb = process.env.SOULOSCOPE_DATABASE_URL
+  ? new PgPool({ connectionString: process.env.SOULOSCOPE_DATABASE_URL })
+  : null;
+
+async function safeQuery(pool, sql, fallback = { rows: [{}] }) {
+  if (!pool) return fallback;
+  try { return await pool.query(sql); } catch { return fallback; }
+}
+
+async function fetchGitHubIssues(repo) {
+  if (!GITHUB_TOKEN || !repo) return { open: 0, closed: 0, bugs: [] };
+  try {
+    const [openRes, closedRes] = await Promise.all([
+      fetch(`https://api.github.com/repos/${repo}/issues?state=open&per_page=10`, {
+        headers: { Authorization: `Bearer ${GITHUB_TOKEN}`, Accept: 'application/vnd.github.v3+json' }
+      }),
+      fetch(`https://api.github.com/repos/${repo}/issues?state=closed&per_page=100`, {
+        headers: { Authorization: `Bearer ${GITHUB_TOKEN}`, Accept: 'application/vnd.github.v3+json' }
+      }),
+    ]);
+    const open = await openRes.json();
+    const closed = await closedRes.json();
+    return {
+      open: Array.isArray(open) ? open.length : 0,
+      closed: Array.isArray(closed) ? closed.length : 0,
+      bugs: Array.isArray(open) ? open.slice(0, 5).map(i => ({
+        number: i.number, title: i.title, severity: (i.labels||[]).map(l=>l.name).join(', ') || 'unknown', created_at: i.created_at
+      })) : [],
+    };
+  } catch { return { open: 0, closed: 0, bugs: [] }; }
+}
 
 app.get('/api/analytics', async (req, res) => {
   try {
-    const [soulUsers, soulOrders, soulSubs, mindUsers, mindSessions, mindRevenue] = await Promise.all([
-      soulDb.query(`SELECT
-        COUNT(*) AS total,
-        COUNT(CASE WHEN created_at >= NOW() - INTERVAL '30 days' THEN 1 END) AS new_30d
-        FROM users`),
-      soulDb.query(`SELECT
-        COUNT(*) AS total_orders,
-        COALESCE(SUM(amount_subunit), 0) AS revenue_paise,
-        COALESCE(SUM(CASE WHEN created_at >= NOW() - INTERVAL '30 days' THEN amount_subunit END), 0) AS mrr_paise
-        FROM orders`),
-      soulDb.query(`SELECT
-        COUNT(CASE WHEN ends_at > NOW() THEN 1 END) AS active,
-        COUNT(CASE WHEN ends_at BETWEEN NOW() - INTERVAL '30 days' AND NOW() THEN 1 END) AS churned
-        FROM subscriptions`),
-      mindDb.query(`SELECT
-        COUNT(*) AS total,
-        COUNT(CASE WHEN created_at >= NOW() - INTERVAL '30 days' THEN 1 END) AS new_30d
-        FROM users`),
-      mindDb.query(`SELECT
-        COUNT(*) AS total,
-        COUNT(CASE WHEN created_at >= NOW() - INTERVAL '30 days' THEN 1 END) AS sessions_30d
-        FROM chat_sessions`),
-      mindDb.query(`SELECT
-        COALESCE(SUM(CASE WHEN tx_type = 'purchase' THEN amount END), 0) AS total_paise,
-        COALESCE(SUM(CASE WHEN tx_type = 'purchase' AND created_at >= NOW() - INTERVAL '30 days' THEN amount END), 0) AS mrr_paise
-        FROM credit_transactions`),
+    const [soulUsers, soulOrders, soulSubs, soulBugQueue, ghIssues] = await Promise.all([
+      safeQuery(soulDb, `SELECT COUNT(*) AS total, COUNT(CASE WHEN created_at >= NOW() - INTERVAL '30 days' THEN 1 END) AS new_30d FROM users`),
+      safeQuery(soulDb, `SELECT COUNT(*) AS total_orders, COALESCE(SUM(amount_subunit), 0) AS revenue_paise, COALESCE(SUM(CASE WHEN created_at >= NOW() - INTERVAL '30 days' THEN amount_subunit END), 0) AS mrr_paise FROM orders`),
+      safeQuery(soulDb, `SELECT COUNT(CASE WHEN ends_at > NOW() THEN 1 END) AS active, COUNT(CASE WHEN ends_at BETWEEN NOW() - INTERVAL '30 days' AND NOW() THEN 1 END) AS churned FROM subscriptions`),
+      safeQuery(soulDb, `SELECT COUNT(*) AS total, COUNT(CASE WHEN status='github_failed' THEN 1 END) AS failed, COUNT(CASE WHEN status='done' THEN 1 END) AS done FROM bug_report_queue`),
+      fetchGitHubIssues(process.env.GITHUB_REPO_SOULOSCOPE || 'SkyDaddy001/souloscope2.0'),
     ]);
 
     const su = soulUsers.rows[0];
     const so = soulOrders.rows[0];
     const ss = soulSubs.rows[0];
-    const mu = mindUsers.rows[0];
-    const ms = mindSessions.rows[0];
-    const mr = mindRevenue.rows[0];
+    const bq = soulBugQueue.rows[0];
 
     const paise = (v) => `₹${(parseInt(v || 0) / 100).toFixed(0)}`;
-    const soulChurnRate = ss.active > 0
-      ? ((ss.churned / (parseInt(ss.active) + parseInt(ss.churned))) * 100).toFixed(1) + '%'
+    const soulChurnRate = parseInt(ss.active||0) > 0
+      ? ((parseInt(ss.churned||0) / (parseInt(ss.active||0) + parseInt(ss.churned||0))) * 100).toFixed(1) + '%'
       : '0%';
 
     res.json({
       souloscope: {
-        users: parseInt(su.total),
-        newUsers30d: parseInt(su.new_30d),
+        users: parseInt(su.total || 0),
+        newUsers30d: parseInt(su.new_30d || 0),
         revenue: paise(so.revenue_paise),
         mrr: paise(so.mrr_paise),
-        activeSubs: parseInt(ss.active),
+        activeSubs: parseInt(ss.active || 0),
         churn: soulChurnRate,
-        orders: parseInt(so.total_orders),
+        orders: parseInt(so.total_orders || 0),
+        bugs: {
+          queued: parseInt(bq.total || 0),
+          openIssues: ghIssues.open,
+          closedIssues: ghIssues.closed,
+          recentBugs: ghIssues.bugs,
+        },
       },
-      mindprint: {
-        users: parseInt(mu.total),
-        newUsers30d: parseInt(mu.new_30d),
-        sessions: parseInt(ms.total),
-        sessions30d: parseInt(ms.sessions_30d),
-        revenue: paise(mr.total_paise),
-        mrr: paise(mr.mrr_paise),
-        churn: '—',
-      },
+      mindprint: { users: 0, newUsers30d: 0, sessions: 0, sessions30d: 0, revenue: '₹0', mrr: '₹0', churn: '—' },
     });
   } catch (e) {
     console.error('Analytics error:', e.message);
@@ -435,6 +440,7 @@ app.get('/api/analytics', async (req, res) => {
 // --- POST /api/bug-report ---
 // Sources: frontend JS errors, API failures, bot reports, health alerts
 // Flow: create GitHub issue → post to #engineering → CEO dispatches eng_soul analysis
+const _bugReportCooldowns = new Map();  // title → last report timestamp (dedup per 10min)
 app.post('/api/bug-report', async (req, res) => {
   const {
     title,
@@ -447,6 +453,12 @@ app.post('/api/bug-report', async (req, res) => {
   } = req.body;
 
   if (!title) return res.status(400).json({ error: 'title required' });
+  const cooldownKey = title.slice(0, 80);
+  const lastSeen = _bugReportCooldowns.get(cooldownKey) || 0;
+  if (Date.now() - lastSeen < 10 * 60 * 1000) {
+    return res.json({ ok: true, skipped: 'duplicate within 10min' });
+  }
+  _bugReportCooldowns.set(cooldownKey, Date.now());
 
   const repo = GITHUB_REPOS[project] || GITHUB_REPOS['company-os'];
   const labels = ['bug', severity, source].filter(Boolean);
