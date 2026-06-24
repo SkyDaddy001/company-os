@@ -36,14 +36,19 @@ async function createGithubIssue(repo, title, body, labels = []) {
 }
 
 // Maps dept prefix → Mattermost channel ID
+// Department channels removed — all events route to project channels
+const CH_QUCOGROUP  = 'fpkydxtjyjrx8qyjugyzk1aaxc'; // #qucogroup-com
+const CH_SOULOSCOPE = 'n5f9h1h5ktg738cc1tojhxu5ih'; // #souloscope
+const CH_BOSS       = 'bxumznxnciy9pqg1e9api4oagy'; // #boss
+
 const DEPT_CHANNELS = {
-  brand:   'yt9r8oqdyif9df1hm6cedzn6je',
-  prod:    '47a766zd8fgfbqkducu1cm58ay',
-  eng:     'c4o8n8fxbjdo5bebgs3dmj9hno',
-  devops:  'qyk64ea4wpfwbmk4ugkr8ekeyo',
-  mkt:     '6ih4rut4q3nqdesxa9qhs3suuw',
-  supp:    '95orbw611br5888ric16ka6cce',
-  res:     't4chwq98widtupeiik7thmuhoc',
+  brand:  CH_SOULOSCOPE,
+  prod:   CH_SOULOSCOPE,
+  eng:    CH_QUCOGROUP,
+  devops: CH_QUCOGROUP,
+  mkt:    CH_SOULOSCOPE,
+  supp:   CH_SOULOSCOPE,
+  res:    CH_QUCOGROUP,
 };
 
 function channelForDept(targetId) {
@@ -482,19 +487,20 @@ app.post('/api/bug-report', async (req, res) => {
   // Log event
   await publishEvent('bug.reported', `eng_soul`, title, issue.url || issue.error || '');
 
-  // Post to #engineering in Mattermost
+  // Post to project channel + escalate critical/high to #boss
   const severityEmoji = { critical: '🔴', high: '🟠', medium: '🟡', low: '🟢' }[severity] || '⚪';
-  await postToMattermost(DEPT_CHANNELS.eng,
+  const bugChannel = project === 'souloscope' ? CH_SOULOSCOPE : CH_QUCOGROUP;
+  await postToMattermost(bugChannel,
     `${severityEmoji} **Bug Report** [${severity.toUpperCase()}] — ${source}\n` +
     `**${title}**\n` +
     (description ? `> ${description.slice(0, 200)}\n` : '') +
     (issue.url ? `📎 [GitHub #${issue.number}](${issue.url})` : `⚠️ GitHub error: ${issue.error}`)
   );
 
-  // For critical/high: also post to #ceo so CEO agent can coordinate a fix
   if (severity === 'critical' || severity === 'high') {
-    await postToMattermost(DEPT_CHANNELS.devops,
-      `${severityEmoji} **${severity.toUpperCase()} BUG** detected in ${project}: ${title}`
+    await postToMattermost(CH_BOSS,
+      `${severityEmoji} **${severity.toUpperCase()} BUG** in ${project}: ${title}\n` +
+      (issue.url ? `📎 [GitHub #${issue.number}](${issue.url})` : '')
     );
   }
 
