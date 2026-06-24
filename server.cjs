@@ -346,6 +346,49 @@ app.get('/api/health', (req, res) => {
   });
 });
 
+// --- GET /api/services — per-project health for planet status ---
+app.get('/api/services', async (req, res) => {
+  const check = (url, timeoutMs = 3000) =>
+    fetch(url, { signal: AbortSignal.timeout(timeoutMs) })
+      .then(r => r.ok)
+      .catch(() => false);
+
+  const checkDocker = (name) => new Promise(resolve => {
+    exec(`docker inspect --format='{{.State.Running}}' ${name} 2>/dev/null`, (_, out) =>
+      resolve(out.trim() === 'true'));
+  });
+
+  const [
+    soulBackend, soulFrontend, soulDb,
+    mindprint,
+    mattermost, picoclaw, jenkins, redis,
+  ] = await Promise.all([
+    checkDocker('backend-blue').then(r => r || checkDocker('backend-green')),
+    checkDocker('frontend-green').then(r => r || checkDocker('frontend-blue')),
+    checkDocker('souloscope-postgres').then(r => r || checkDocker('astrocalc-blue')),
+    check('http://localhost:4000/').catch(() => checkDocker('mindprint')),
+    check('http://localhost:8065/api/v4/system/ping'),
+    check('http://localhost:18790/health'),
+    checkDocker('jenkins-automation'),
+    checkDocker('mailu-redis'),
+  ]);
+
+  res.json({
+    souloscope: {
+      online: soulBackend && soulFrontend,
+      services: { backend: soulBackend, frontend: soulFrontend, db: soulDb },
+    },
+    mindprint: {
+      online: mindprint,
+      services: { app: mindprint },
+    },
+    'qucogroup-com': {
+      online: true, // this server itself is answering
+      services: { mattermost, picoclaw, jenkins, redis },
+    },
+  });
+});
+
 // --- GET /api/tasks ---
 app.get('/api/tasks', async (req, res) => {
   try {

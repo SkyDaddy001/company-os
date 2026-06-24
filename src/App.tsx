@@ -102,12 +102,13 @@ type Analytics = {
   activeSubs?: number; orders?: number;
   sessions?: number; sessions30d?: number;
 };
-type Project = { id: string; name: string; position: [number, number, number]; color: string; departments: Department[]; analytics: Analytics | null };
+type ServiceStatus = { online: boolean; services: Record<string, boolean> };
+type Project = { id: string; name: string; position: [number, number, number]; color: string; departments: Department[]; analytics: Analytics | null; online: boolean; services?: Record<string, boolean> };
 type OsEvent = { type: string; targetId: string; payload: string; reply: string; ts: string };
 
 const projects: Project[] = [
   {
-    id: 'souloscope',
+    id: 'souloscope', online: true,
     name: 'Souloscope',
     position: [-20, 0, -10],
     color: '#00f0ff',
@@ -123,7 +124,7 @@ const projects: Project[] = [
     ]
   },
   {
-    id: 'mindprint',
+    id: 'mindprint', online: true,
     name: 'Mindprint',
     position: [20, 0, 10],
     color: '#ff00ff',
@@ -138,31 +139,35 @@ const projects: Project[] = [
 
 // --- 3D Components ---
 
-const DepartmentNode = ({ dept, projectPos, onFocus }: { dept: Department, projectPos: [number, number, number], onFocus: (pos: [number, number, number]) => void }) => {
+const DepartmentNode = ({ dept, projectPos, onFocus, projectOnline = true }: { dept: Department, projectPos: [number, number, number], onFocus: (pos: [number, number, number]) => void, projectOnline?: boolean }) => {
   const group = useRef<THREE.Group>(null);
   const [hovered, setHover] = useState(false);
   const [clicked, setClicked] = useState(false);
+  const frozenAngle = useRef(dept.angle); // holds position when offline
 
-  // Identify all states and give them appropriate action color
   const getTaskColor = (task: string) => {
+    if (!projectOnline) return '#333333'; // dark grey when offline
     const t = task.toLowerCase();
-    if (t === 'idle') return '#555555'; // Grey for Idle
-    if (t.includes('fail') || t.includes('error')) return '#ff3333'; // Red for errors
-    if (t.includes('live') || t.includes('monitor') || t.includes('running') || t.includes('healthy')) return '#00ff66'; // Green for running/healthy
-    if (t.includes('receiv') || t.includes('transmit')) return '#ffaa00'; // Orange for comms
-    if (t.includes('analyz') || t.includes('process')) return '#00f0ff'; // Cyan for thinking
-    return '#bb00ff'; // Purple for other active tasks
+    if (t === 'idle') return '#555555';
+    if (t.includes('fail') || t.includes('error')) return '#ff3333';
+    if (t.includes('live') || t.includes('monitor') || t.includes('running') || t.includes('healthy')) return '#00ff66';
+    if (t.includes('receiv') || t.includes('transmit')) return '#ffaa00';
+    if (t.includes('analyz') || t.includes('process')) return '#00f0ff';
+    return '#bb00ff';
   };
-  
+
   const nodeColor = getTaskColor(dept.tasks);
 
   useFrame((state) => {
     if (group.current) {
-      const time = state.clock.elapsedTime;
-      const currentAngle = dept.angle + time * dept.orbitSpeed;
-      group.current.position.x = Math.cos(currentAngle) * dept.orbitRadius;
-      group.current.position.z = Math.sin(currentAngle) * dept.orbitRadius;
-      group.current.position.y = 0;
+      if (projectOnline) {
+        const time = state.clock.elapsedTime;
+        const currentAngle = dept.angle + time * dept.orbitSpeed;
+        frozenAngle.current = currentAngle; // track last position
+        group.current.position.x = Math.cos(currentAngle) * dept.orbitRadius;
+        group.current.position.z = Math.sin(currentAngle) * dept.orbitRadius;
+      }
+      // offline → satellites stay frozen at last known position
     }
   });
 
@@ -265,9 +270,17 @@ const ProjectSystem = ({ project, onFocus }: { project: Project, onFocus: (pos: 
   const planetRef = useRef<THREE.Mesh>(null);
   const [showAnalytics, setShowAnalytics] = useState(false);
   const a = project.analytics;
+  const online = project.online !== false;
 
   useFrame(() => {
-    if (planetRef.current) planetRef.current.rotation.y += 0.005;
+    if (planetRef.current) {
+      // Slow pulse when offline instead of rotation
+      if (online) {
+        planetRef.current.rotation.y += 0.005;
+      } else {
+        planetRef.current.rotation.y += 0.0005;
+      }
+    }
   });
 
   return (
@@ -282,11 +295,11 @@ const ProjectSystem = ({ project, onFocus }: { project: Project, onFocus: (pos: 
       >
         <meshPhysicalMaterial
           color="#000000"
-          emissive={project.color}
-          emissiveIntensity={showAnalytics ? 0.5 : 0.2}
+          emissive={online ? project.color : '#220000'}
+          emissiveIntensity={online ? (showAnalytics ? 0.5 : 0.2) : 0.05}
           wireframe
           transparent
-          opacity={0.3}
+          opacity={online ? 0.3 : 0.15}
           roughness={0.2}
           metalness={0.8}
         />
@@ -294,7 +307,11 @@ const ProjectSystem = ({ project, onFocus }: { project: Project, onFocus: (pos: 
 
       {/* Inner Core */}
       <Sphere args={[1.8, 32, 32]}>
-        <meshStandardMaterial color={project.color} emissive={project.color} emissiveIntensity={showAnalytics ? 1 : 0.5} />
+        <meshStandardMaterial
+          color={online ? project.color : '#330000'}
+          emissive={online ? project.color : '#110000'}
+          emissiveIntensity={online ? (showAnalytics ? 1 : 0.5) : 0.05}
+        />
       </Sphere>
 
       <Text
@@ -396,13 +413,23 @@ const ProjectSystem = ({ project, onFocus }: { project: Project, onFocus: (pos: 
         </group>
       ))}
 
+      {/* Offline badge */}
+      {!online && (
+        <Html position={[0, 3.2, 0]} center>
+          <div style={{ color: '#ff3333', fontFamily: 'monospace', fontSize: '0.7rem', background: 'rgba(20,0,0,0.85)', padding: '2px 8px', border: '1px solid #ff3333', borderRadius: '3px', whiteSpace: 'nowrap' }}>
+            ⚠ OFFLINE
+          </div>
+        </Html>
+      )}
+
       {/* Satellites */}
       {project.departments.map(dept => (
-        <DepartmentNode 
-          key={dept.id} 
-          dept={dept} 
+        <DepartmentNode
+          key={dept.id}
+          dept={dept}
           projectPos={project.position}
           onFocus={onFocus}
+          projectOnline={online}
         />
       ))}
     </group>
@@ -723,6 +750,25 @@ const CompanyOS = () => {
   const [activeProjects, setActiveProjects] = useState<Project[]>(projects);
   const [focusTarget, setFocusTarget] = useState<{ target: [number,number,number], isOverview: boolean } | null>(null);
   const [osEvents, setOsEvents] = useState<OsEvent[]>([]);
+
+  // Poll /api/services — mark planets online/offline
+  useEffect(() => {
+    const fetchServices = async () => {
+      try {
+        const res = await fetch('/api/services');
+        if (!res.ok) return;
+        const data: Record<string, ServiceStatus> = await res.json();
+        setActiveProjects(current => current.map(p => {
+          const s = data[p.id];
+          if (!s) return p;
+          return { ...p, online: s.online, services: s.services };
+        }));
+      } catch {}
+    };
+    fetchServices();
+    const iv = setInterval(fetchServices, 15000);
+    return () => clearInterval(iv);
+  }, []);
 
   // Fetch live analytics and inject into project state
   useEffect(() => {
