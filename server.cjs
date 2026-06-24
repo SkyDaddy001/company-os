@@ -578,6 +578,54 @@ app.get('/api/docker-status', (req, res) => {
   });
 });
 
+// Jenkins proxy — agents call curl http://172.17.0.1:3001/api/jenkins/...
+// GET  /api/jenkins/jobs            → list all jobs + last build status
+// POST /api/jenkins/build/:job      → trigger build (body: {branch:"main"})
+// GET  /api/jenkins/build/:job/last → last build status
+const JENKINS_URL   = 'http://10.0.0.61:8080';
+const JENKINS_CREDS = 'pico-agent:11219768fa475aefe42120f0ec65d23cd5';
+const JENKINS_AUTH  = 'Basic ' + Buffer.from(JENKINS_CREDS).toString('base64');
+
+async function jenkinsGet(path) {
+  const r = await fetch(`${JENKINS_URL}${path}`, { headers: { Authorization: JENKINS_AUTH } });
+  if (!r.ok) throw new Error(`Jenkins ${r.status} at ${path}`);
+  return r.json();
+}
+
+async function jenkinsPost(path, body = '') {
+  const crumbData = await fetch(`${JENKINS_URL}/crumbIssuer/api/json`, { headers: { Authorization: JENKINS_AUTH } }).then(r => r.json());
+  const r = await fetch(`${JENKINS_URL}${path}`, {
+    method: 'POST',
+    headers: { Authorization: JENKINS_AUTH, [crumbData.crumbRequestField]: crumbData.crumb, 'Content-Type': 'application/x-www-form-urlencoded' },
+    body,
+  });
+  return r.status;
+}
+
+app.get('/api/jenkins/jobs', async (req, res) => {
+  try {
+    const data = await jenkinsGet('/api/json?tree=jobs[name,color,url,lastBuild[number,result,timestamp,duration]]');
+    res.json(data.jobs || []);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/jenkins/build/:job/last', async (req, res) => {
+  try {
+    const job = encodeURIComponent(req.params.job);
+    const data = await jenkinsGet(`/job/${job}/api/json?tree=lastBuild[number,result,timestamp,duration,displayName],name,color`);
+    res.json(data);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/jenkins/build/:job', async (req, res) => {
+  try {
+    const job    = encodeURIComponent(req.params.job);
+    const branch = (req.body?.branch || 'main').replace(/[^a-zA-Z0-9._/-]/g, '');
+    const status = await jenkinsPost(`/job/${job}/job/${branch}/build`);
+    res.json({ triggered: status === 201 || status === 200, status });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // SPA fallback — must be after all API routes
 app.get('/{*splat}', (req, res) => {
   res.sendFile(require('path').join(__dirname, 'dist', 'index.html'));
