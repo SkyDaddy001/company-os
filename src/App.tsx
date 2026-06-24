@@ -57,10 +57,10 @@ if (typeof window !== 'undefined') {
     });
   };
   window.addEventListener('unhandledrejection', (e) => {
-    const title = String(e.reason);
-    if (IGNORED_ERRORS.some(s => title.toLowerCase().includes(s.toLowerCase()))) return;
+    const reasonStr = (typeof e.reason === 'string') ? e.reason : (e.reason?.message || String(e.reason));
+    if (IGNORED_ERRORS.some(s => reasonStr.toLowerCase().includes(s.toLowerCase()))) return;
     reportBug({
-      title: `Unhandled Promise: ${title.slice(0, 120)}`,
+      title: `Unhandled Promise: ${String(e.reason).slice(0, 120)}`,
       stack: e.reason?.stack,
       url: window.location.href,
       severity: 'medium',
