@@ -567,7 +567,7 @@ app.get('/api/docker-status', (req, res) => {
       const up      = status?.toLowerCase().startsWith('up');
       return { name, status, image, healthy, up };
     });
-    const unhealthy = containers.filter(c => c.up && !c.healthy && status?.includes('('));
+    const unhealthy = containers.filter(c => c.up && !c.healthy && c.status?.includes('('));
     res.json({
       ts: new Date().toISOString(),
       total: containers.length,
