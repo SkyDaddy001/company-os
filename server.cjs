@@ -387,7 +387,7 @@ async function fetchGitHubIssues(repo) {
       open: Array.isArray(open) ? open.length : 0,
       closed: Array.isArray(closed) ? closed.length : 0,
       bugs: Array.isArray(open) ? open.slice(0, 5).map(i => ({
-        number: i.number, title: i.title, severity: (i.labels||[]).map(l=>l.name).join(', ') || 'unknown', created_at: i.created_at
+        number: i.number, title: i.title, severity: (i.labels||[]).map(l=>l.name).join(', ') || 'unknown', last_seen: i.updated_at
       })) : [],
     };
   } catch { return { open: 0, closed: 0, bugs: [] }; }
